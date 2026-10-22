@@ -396,15 +396,19 @@ function renderCalendar() {
 
   const chosen = CAMPS.map(c => ({ c, k: picks[c], m: M[picks[c]] })).filter(x => x.m && x.m.code !== "JOKER");
   const cells = {}; // date|half -> {evs:[], conflict}
-  const put = (date, h, ev) => ((cells[`${date}|${h}`] ||= { evs: [] }).evs.push(ev));
+  CAL_DAYS = {};    // date -> tous les événements du jour (pour le détail au clic)
+  const put = (date, h, ev) => { (cells[`${date}|${h}`] ||= { evs: [] }).evs.push(ev); (CAL_DAYS[date] ||= []).push(ev); };
   for (const { k, m } of chosen) for (const s of m.seances) put(s.date, half(s.debut), { kind: "mine", k, code: m.code, s, est: m.seances_estimees });
   for (const p of D.promo) put(p.date, half(p.debut), { kind: "promo", code: p.n > 1 ? `${p.label} ×${p.n}` : p.label, s: p });
+  // Chevauchement = un de mes modules EN MÊME TEMPS qu'un autre cours (horaires qui se recouvrent).
+  // Deux cours le même jour à des heures différentes ne comptent pas.
+  const overlap = (a, b) => a.s.date === b.s.date && mins(a.s.debut) < mins(b.s.fin) && mins(b.s.debut) < mins(a.s.fin);
   let conflicts = 0;
-  for (const cell of Object.values(cells)) {
-    const mods = cell.evs.filter(e => e.kind !== "promo"), per = cell.evs.filter(e => e.kind === "promo");
-    cell.conflict = mods.some(a => per.some(b => mins(a.s.debut) < mins(b.s.fin) && mins(b.s.debut) < mins(a.s.fin))) || mods.length > 1;
-    conflicts += cell.conflict;
-  }
+  for (const evs of Object.values(CAL_DAYS)) for (const a of evs) a.with = [];
+  for (const evs of Object.values(CAL_DAYS)) evs.forEach((a, i) => evs.slice(i + 1).forEach(b => {
+    if ((a.kind === "mine" || b.kind === "mine") && overlap(a, b)) { a.with.push(b); b.with.push(a); conflicts++; }
+  }));
+  for (const cell of Object.values(cells)) cell.conflict = cell.evs.some(e => e.with.length);
 
   // semaines (lundis) ; les 2 semaines de vacances fusionnées
   const mondays = [];
@@ -421,7 +425,7 @@ function renderCalendar() {
       const d = new Date(w); d.setDate(d.getDate() + di);
       const key = iso(d), cell = cells[`${key}|${h}`];
       const evs = (cell?.evs || []).sort((a, b) => (a.kind === "promo") - (b.kind === "promo"));
-      g += `<div class="cell ${h} ${cell?.conflict ? "conflict" : ""}" title="${fmtD(key)} ${h === "am" ? "matin" : "après-midi"}">${
+      g += `<div class="cell ${h} ${cell?.conflict ? "conflict" : ""} ${CAL_DAYS[key] ? "has" : ""}" data-date="${key}" role="button" tabindex="0" title="${fmtD(key)} : clic pour le détail de la journée">${
         evs.map(e => `<span class="ev ${e.kind} ${e.est ? "est" : ""} ${e.s.eval ? "isev" : ""}" ${e.k ? `style="${dcol(e.k)}"` : ""} title="${esc(e.s.titre || e.code)} · ${e.s.debut}-${e.s.fin}${e.s.n > 1 ? ` · ${e.s.n} groupes/jurys en parallèle` : ""}${e.est ? " · créneau estimé" : ""}">${e.k ? `<i class="sw"></i>` : ""}${e.s.eval ? "◆ " : ""}${esc(e.code)}</span>`).join("")
       }</div>`;
     }
@@ -439,7 +443,7 @@ function renderCalendar() {
   const peak = Object.entries(byWeek).sort((a, b) => b[1].length - a[1].length)[0];
   const stat = (v, l, sub = "", cls = "") => `<div class="stat ${cls}"><b>${v}</b><span>${l}</span>${sub ? `<span class="faint">${sub}</span>` : ""}</div>`;
   $("#cal-summary").innerHTML = [
-    stat(conflicts, `chevauchement${conflicts > 1 ? "s" : ""}`, "avec l'agenda de la promo", conflicts ? "bad" : ""),
+    stat(conflicts, `cours en même temps`, conflicts ? "voir les cases en rouge" : "le même jour à d'autres heures, c'est ok", conflicts ? "bad" : ""),
     stat(`${Math.round(hours)} h`, "de cours planifiées", est.length ? `+ ${est.map(x => x.m.code).join(", ")} pas encore planifié${est.length > 1 ? "s" : ""}` : ""),
     stat(evals.length, `évaluation${evals.length > 1 ? "s" : ""}`, evals.sort((a, b) => a.s.date.localeCompare(b.s.date)).map(({ m, s }) => `${m.code} ${fmtDM(s.date)}`).join(" · ")),
     peak && peak[1].length > 1 ? stat(peak[1].length, "évaluations la même semaine", `semaine du ${fmtDM(peak[0])}`, "risk") : "",
@@ -451,6 +455,45 @@ $("#cal-picks").addEventListener("change", e => {
   S.cal = { ...calPicks(), [sel.dataset.camp]: sel.value }; save(); renderCalendar();
 });
 $("#cal-picks").addEventListener("click", e => { if (e.target.id === "cal-reset") { S.cal = null; save(); renderCalendar(); } });
+
+/* Détail d'une journée : clic sur une case du calendrier */
+let CAL_DAYS = {}, popDate = null;
+function openDay(date, anchor) {
+  const pop = $("#cal-pop"), evs = (CAL_DAYS[date] || []).slice().sort((a, b) => a.s.debut.localeCompare(b.s.debut) || (a.kind === "promo") - (b.kind === "promo"));
+  const d = dateOf(date).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+  const row = e => {
+    const mine = e.kind === "mine", m = mine ? M[e.k] : null;
+    const what = mine ? `${esc(m.titre)}` : esc(e.s.titre || e.s.label);
+    const kind = [e.s.eval ? `◆ ${esc(e.s.label)}` : esc(e.s.type || e.s.label), e.est ? "créneau estimé" : "", e.s.n > 1 ? `${e.s.n} groupes en parallèle` : ""].filter(Boolean).join(" · ");
+    const ov = e.with.length ? `<div class="ov">en même temps que ${e.with.map(o => `<b>${esc(o.code)}</b> ${o.s.debut}–${o.s.fin}`).join(", ")}</div>` : "";
+    return `<div class="pr ${e.kind} ${e.with.length ? "conflict" : ""} ${e.s.eval && mine ? "isev" : ""}" ${mine ? `style="${dcol(e.k)}"` : ""}>
+      <span class="t">${e.s.debut}–${e.s.fin}</span>
+      <span class="w">${mine ? `<i class="sw"></i>` : ""}<b>${esc(mine ? m.code : e.s.label)}</b> ${mine ? `<span class="faint">${esc(m.campagne)}</span>` : `<span class="faint">promo</span>`}<br><span class="muted">${what}</span><br><span class="faint">${kind}</span>${ov}</span>
+    </div>`;
+  };
+  pop.innerHTML = `<div class="pop-head"><b>${d.charAt(0).toUpperCase() + d.slice(1)}</b><button class="d-close" data-close aria-label="Fermer">✕</button></div>
+    <div class="pop-body">${evs.length ? evs.map(row).join("") : `<p class="faint small pad">Rien de prévu ce jour-là.</p>`}</div>
+    <div class="pop-foot faint">Même jour à des heures différentes : pas de problème. Seuls les horaires qui se recouvrent comptent.</div>`;
+  pop.hidden = false; popDate = date;
+  const r = anchor.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
+  let x = r.right + 6; if (x + pw > innerWidth - 8) x = r.left - pw - 6; if (x < 8) x = 8;
+  let y = r.top; if (y + ph > innerHeight - 8) y = Math.max(56, innerHeight - ph - 8);
+  Object.assign(pop.style, { left: `${x}px`, top: `${y}px` });
+  for (const c of document.querySelectorAll("#cal-grid .cell.on")) c.classList.remove("on");
+  for (const c of document.querySelectorAll(`#cal-grid .cell[data-date="${date}"]`)) c.classList.add("on");
+}
+function closeDay() { $("#cal-pop").hidden = true; popDate = null; for (const c of document.querySelectorAll("#cal-grid .cell.on")) c.classList.remove("on"); }
+$("#cal-grid").addEventListener("click", e => {
+  const c = e.target.closest(".cell[data-date]"); if (!c) return;
+  popDate === c.dataset.date ? closeDay() : openDay(c.dataset.date, c);
+});
+$("#cal-grid").addEventListener("keydown", e => {
+  const c = e.target.closest(".cell[data-date]");
+  if (c && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openDay(c.dataset.date, c); }
+});
+document.addEventListener("click", e => { if (popDate && !e.target.closest("#cal-pop, #cal-grid .cell") || e.target.closest("[data-close]")) closeDay(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && popDate) closeDay(); });
+document.addEventListener("viewshown", closeDay);
 
 /* ---------------- Tout tenir dans l'écran ---------------- */
 function fit() { // jusqu'à 11 lignes par colonne : hauteur disponible répartie (36 à 50 px)

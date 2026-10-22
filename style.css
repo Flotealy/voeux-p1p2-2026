@@ -283,6 +283,28 @@ html[data-theme="dark"] .cal-summary .stat b { color: var(--text); }
 .ev.mine.isev { background: var(--accent-bg); box-shadow: inset 2px 0 0 var(--accent); font-weight: 750; }
 .ev.promo.isev { font-weight: 600; }
 .ev.est { font-style: italic; }
+.cell.has { cursor: pointer; }
+.cell:hover { background: var(--tint); }
+.cell.on { background: var(--accent-bg); box-shadow: inset 0 0 0 2px var(--accent); }
+.cell.conflict.on { box-shadow: inset 0 0 0 2px var(--critical); }
+/* Détail d'une journée */
+.pop {
+  position: fixed; z-index: 60; width: 340px; max-height: calc(100vh - 70px); display: flex; flex-direction: column;
+  background: var(--surface); border: 1px solid var(--border-strong); border-radius: 4px; box-shadow: 0 8px 24px rgba(30,42,71,.18);
+}
+.pop-head { display: flex; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 13.5px; }
+.pop-head b { color: var(--navy); }
+html[data-theme="dark"] .pop-head b { color: var(--text); }
+.pop-body { overflow: auto; }
+.pr { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 8px; padding: 7px 12px; border-bottom: 1px solid var(--border); font-size: 12.5px; line-height: 1.4; }
+.pr .t { font-weight: 650; color: var(--text); white-space: nowrap; }
+.pr .w .sw { margin-right: 5px; vertical-align: 0; }
+.pr.promo .t, .pr.promo .w b { color: var(--text-2); }
+.pr.isev { background: var(--accent-bg); box-shadow: inset 2px 0 0 var(--accent); }
+.pr.conflict { background: var(--critical-bg); box-shadow: inset 2px 0 0 var(--critical); }
+.pr .ov { color: var(--crit-ink); font-weight: 600; margin-top: 2px; }
+.pop-foot { padding: 7px 12px; font-size: 11.5px; }
+.pad { padding: 10px 12px; margin: 0; }
 
 /* ================= Profs / Parcours (matrice + panneau) ================= */
 .split { display: grid; grid-template-columns: minmax(0, 1fr) 370px; grid-template-rows: minmax(0, 1fr); }
