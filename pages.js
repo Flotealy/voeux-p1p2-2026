@@ -15,6 +15,7 @@ const FRESH = { ok: "à jour", partiel: "en partie dépassé", obsolete: "plus v
 
 function goto(k) { // ouvrir la fiche dans Classement
   S.pinned = k;
+  if (PHONE.matches) S.mcamp = campOf(k) || M[k].campagne;
   document.querySelector('.tabs [data-view="classement"]').click();
   render();
 }
@@ -73,6 +74,7 @@ function shared(k, f) {
   return { hits, lvl: hits.some(p => p.vap_role === "resp") ? 2 : hits.length ? 1 : 0 };
 }
 function renderProfs() {
+  if (PHONE.matches) { $("#profs-mx").innerHTML = ""; $("#profs-side").innerHTML = profsSide(); return; }
   matrix($("#profs-mx"), {
     sel: PS,
     cell: (k, f) => {
@@ -88,12 +90,13 @@ function vapBlock(f) {
     <div class="small"><b>${esc(v.responsables.join(", "))}</b>${v.equipe.length ? ` <span class="faint">· équipe : ${esc(v.equipe.join(", "))}</span>` : ""}</div></div>`).join("");
 }
 const linkedTo = f => ROWS.map(k => ({ k, ...shared(k, f) })).filter(x => x.lvl).sort((a, b) => b.lvl - a.lvl);
+const back = (label = "Toutes les filières") => (PHONE.matches ? `<button class="back" data-back>← ${label}</button>` : "");
 function profsSide() {
   const { k, f } = PS;
   if (k && f) {
     const { hits } = shared(k, f), m = M[k];
     const people = [...new Set(hits.map(p => p.nom))];
-    return head(`${modLink(k)}<span>×</span><b>${f}</b>`, esc(m.titre), "", k) + `<div class="d-body">` +
+    return back() + head(`${modLink(k)}<span>×</span><b>${f}</b>`, esc(m.titre), "", k) + `<div class="d-body">` +
       sec("Profs en commun", people.length ? people.map(n => {
         const h = hits.filter(p => p.nom === n);
         return `<div class="person"><b>${esc(n)}</b><span class="small muted">dans ce module : ${ROLE[h[0].role]} · dans la VAP : ${h.map(p => `${ROLE[p.vap_role]} de ${p.vap}`).join(", ")}</span></div>`;
@@ -102,20 +105,20 @@ function profsSide() {
   }
   if (f) {
     const linked = linkedTo(f);
-    return head("Filière", f, `${linked.length} module${linked.length > 1 ? "s" : ""} P1/P2 avec un prof de cette VAP`) + `<div class="d-body">` +
+    return back() + head("Filière", f, `${linked.length} module${linked.length > 1 ? "s" : ""} P1/P2 avec un prof de cette VAP`) + `<div class="d-body">` +
       sec("Modules P1/P2 liés", linked.length ? `<div class="kv">${linked.map(x => `<span class="k">${x.lvl === 2 ? "●" : "○"} ${modLink(x.k)}</span><span>${esc([...new Set(x.hits.map(p => lastName(p.nom)))].join(", "))} <span class="faint">${esc(M[x.k].campagne)}</span></span>`).join("")}</div>`
         : `<p class="small">Aucun : les profs de cette VAP n'enseignent pas en P1/P2. Pour savoir ce qui prépare le mieux, écris directement aux responsables ci-dessous.</p>`) +
       sec("Modules de la VAP", vapBlock(f)) + `</div>`;
   }
   if (k) {
     const m = M[k], links = D.filieres.map(f => ({ f, ...shared(k, f) })).filter(x => x.lvl);
-    return head(`${modLink(k)}<span>${esc(m.campagne)}</span>`, esc(m.titre), "", k) + `<div class="d-body">` +
+    return back() + head(`${modLink(k)}<span>${esc(m.campagne)}</span>`, esc(m.titre), "", k) + `<div class="d-body">` +
       sec("Équipe du module", `<div class="person"><b>${esc((m.responsables || []).join(", ") || "—")}</b><span class="small muted">responsable${m.equipe?.length ? ` · avec ${esc(m.equipe.join(", "))}` : ""}</span></div>`) +
       sec("On les retrouve dans les VAP", links.length ? `<div class="kv">${links.map(x => `<span class="k">${x.lvl === 2 ? "●" : "○"} ${x.f}</span><span>${esc([...new Set(x.hits.map(p => `${lastName(p.nom)} (${p.vap})`))].join(", "))}</span>`).join("")}</div>` : `<p class="faint small">Aucune VAP.</p>`) + `</div>`;
   }
   // Vue d'ensemble : les 12 filières, de la plus liée à la moins liée
   const all = D.filieres.map(f => ({ f, l: linkedTo(f) })).sort((a, b) => b.l.length - a.l.length);
-  return head("Vue d'ensemble", "Profs communs P1/P2 ↔ VAP", "Un prof que tu as en P1/P2 et qu'on retrouve dans la VAP : utile pour un premier contact.") +
+  return head("Vue d'ensemble", "Profs communs P1/P2 ↔ VAP", `Un prof que tu as en P1/P2 et qu'on retrouve dans la VAP : utile pour un premier contact.${PHONE.matches ? " Touche une filière pour le détail." : ""}`) +
     `<div class="d-body">${sec("Par filière", `<div class="frows">${all.map(({ f, l }) => `<button class="frow" data-f="${f}"><b>${f}</b><span class="n">${l.length}</span><span class="codes">${l.length ? l.map(x => esc(M[x.k].code)).join(" · ") : `<span class="faint">aucun prof commun</span>`}</span></button>`).join("")}</div>`)}</div>`;
 }
 $("#profs-mx").addEventListener("click", e => {
@@ -123,7 +126,10 @@ $("#profs-mx").addEventListener("click", e => {
   const n = { k: b.dataset.k, f: b.dataset.f };
   PS = PS.k === n.k && PS.f === n.f ? {} : n; renderProfs();
 });
-$("#profs-side").addEventListener("click", e => { const b = e.target.closest(".frow"); if (b) { PS = { f: b.dataset.f }; renderProfs(); } });
+$("#profs-side").addEventListener("click", e => {
+  if (e.target.closest("[data-back]")) { PS = {}; renderProfs(); scrollTo({ top: 0 }); return; }
+  const b = e.target.closest(".frow"); if (b) { PS = { f: b.dataset.f }; renderProfs(); scrollTo({ top: 0 }); }
+});
 
 /* ---------- Page Parcours 2025-26 ---------- */
 let PC = { mode: "pris" };
@@ -137,6 +143,7 @@ function heatStyle(v) { // séquentiel marine (couleur secondaire), clair → fo
   return `background:color-mix(in srgb, var(--heat) ${a}%, var(--surface));${a > 45 ? "color:var(--surface);" : ""}`;
 }
 function renderParcours() {
+  if (PHONE.matches) { $("#pc-mx").innerHTML = ""; $("#pc-side").innerHTML = parcoursMobile(); return; }
   for (const b of $("#pc-mode").children) b.setAttribute("aria-pressed", b.dataset.mode === PC.mode);
   $("#pc-title").textContent = PC.mode === "pris" ? "Ce qu'avaient pris les étudiants de chaque filière" : "Où sont allés ceux qui avaient pris chaque module";
   $("#pc-hint").textContent = PC.mode === "pris"
@@ -155,6 +162,31 @@ function renderParcours() {
     },
   });
   $("#pc-side").innerHTML = parcoursSide();
+}
+function parcoursMobile() {
+  const bars = rows => `<div class="hbars mods">${rows.map(([lab, v, tail = ""]) => `<span class="f">${lab}</span><span class="track"><span class="bar" style="width:${Math.max(2, v * 100)}%"></span></span><span class="v">${pct(v)}${tail}</span>`).join("")}</div>`;
+  let h = `<div class="d-body pm"><h2 class="pm-title">Parcours de la promo 2025-26</h2>
+    <div class="seg pm-seg">${[["pris", "Parcours type d'une filière"], ["vers", "Où mène un module"]].map(([v, l]) => `<button data-pcmode="${v}" aria-pressed="${PC.mode === v}">${l}</button>`).join("")}</div>`;
+  if (PC.mode === "pris") {
+    const f = PC.f;
+    h += `<div class="fgrid">${D.filieres.map(x => `<button class="chip" data-pf="${x}" aria-pressed="${x === f}">${x}</button>`).join("")}</div>`;
+    if (!f) return h + `<p class="small muted">Choisis une filière : tu verras ce qu'avaient pris ses étudiants de 2025-26, campagne par campagne.</p></div>`;
+    const base = D.modules.NET4201.stats.base[f];
+    h += `<p class="small muted">${base} étudiants ${f} passés par P1/P2 en 2025-26${base < 5 ? " : trop peu pour conclure" : ""}. Une tendance, pas une règle.</p>`;
+    for (const c of CAMPS) {
+      const ks = ROWS.filter(k => M[k].campagne === c && taken(M[k], f) > 0).sort((a, b) => taken(M[b], f) - taken(M[a], f));
+      h += sec(`Ce qu'ils avaient pris en ${c}`, ks.length ? bars(ks.map(k => [modLink(k), taken(M[k], f), M[k].code === "MAT4101" ? "*" : ""])) : `<p class="faint small">rien de marquant</p>`);
+    }
+    return h + `<p class="small faint">* MAT4101 : chiffres du DA4101 2025-26, pris par 74 % de la promo.</p>
+      <button class="primary" data-preset="${f}">Charger ce parcours dans Classement</button></div>`;
+  }
+  const k = PC.k && M[PC.k]?.stats?.n ? PC.k : null;
+  h += `<select class="pm-select" data-pcmod aria-label="Module"><option value="">Choisis un module…</option>${CAMPS.map(c => `<optgroup label="${c}">${
+    ROWS.filter(x => M[x].campagne === c && M[x].stats?.n).map(x => `<option value="${x}" ${x === k ? "selected" : ""}>${esc(codeOf(x))} · ${esc(M[x].titre.slice(0, 42))}</option>`).join("")}</optgroup>`).join("")}</select>`;
+  if (!k) return h + `<p class="small muted">Choisis un module : tu verras dans quelle filière sont partis ceux qui l'avaient pris en 2025-26.</p></div>`;
+  const st = M[k].stats, top = D.filieres.filter(f => st.vers[f]).sort((a, b) => st.vers[b] - st.vers[a]);
+  return h + sec(`Ceux qui avaient pris ${esc(codeOf(k))} sont allés en`, bars(top.map(f => [f, st.vers[f] / st.n])), `${st.n} étudiants`) +
+    `<p class="small faint">${esc(st.source)}</p>${modLink(k)} <span class="small faint">ouvrir sa fiche</span></div>`;
 }
 function parcoursSide() {
   const { k, f } = PC;
@@ -202,8 +234,11 @@ $("#pc-mx").addEventListener("click", e => {
   if (PC.k === n.k && PC.f === n.f) { PC.k = PC.f = undefined; } else { PC.k = n.k; PC.f = n.f; }
   renderParcours();
 });
+$("#pc-side").addEventListener("change", e => { const sel = e.target.closest("[data-pcmod]"); if (sel) { PC.k = sel.value || undefined; PC.f = undefined; renderParcours(); } });
 $("#pc-mode").addEventListener("click", e => { const b = e.target.closest("[data-mode]"); if (b) { PC.mode = b.dataset.mode; renderParcours(); } });
 $("#pc-side").addEventListener("click", e => {
+  const pm = e.target.closest("[data-pcmode]");
+  if (pm) { PC.mode = pm.dataset.pcmode; renderParcours(); return; }
   const pf = e.target.closest("[data-pf]");
   if (pf) { PC.k = undefined; PC.f = pf.dataset.pf; renderParcours(); return; }
   const b = e.target.closest("[data-preset]"); if (!b) return;
@@ -244,7 +279,7 @@ function renderComparer() {
     ["Profs en VAP", k => { const fs = D.filieres.filter(f => shared(k, f).lvl); return fs.length ? fs.map(f => `<b>${f}</b> <span class="muted">${esc([...new Set(shared(k, f).hits.map(p => lastName(p.nom)))].join(", "))}</span>`).join("<br>") : `<span class="faint">aucun</span>`; }],
     ["Responsable", k => esc((M[k].responsables || []).join(", ") || "—")],
   ];
-  grid.innerHTML = rows.map(([lab, fn, cls]) => `<div class="lab ${cls || ""}">${lab}</div>` + keys.map(k => `<div class="${cls || ""}">${fn(k)}</div>`).join("")).join("");
+  grid.innerHTML = rows.map(([lab, fn, cls]) => `<div class="lab ${cls || ""}">${lab}</div>` + keys.map(k => `<div class="${cls || ""}" data-mod="${esc(codeOf(k))}" style="${dcol(k)}"><div class="cv">${fn(k)}</div></div>`).join("")).join("");
 }
 $("#cmp-camps").addEventListener("click", e => { const b = e.target.closest("[data-camp]"); if (b) { CMP = cmpDefault(b.dataset.camp); renderComparer(); } });
 $("#cmp-chips").addEventListener("click", e => {
@@ -258,4 +293,5 @@ $("#cmp-chips").addEventListener("click", e => {
 const PAGES = { comparer: renderComparer, profs: renderProfs, parcours: renderParcours };
 const visible = () => Object.keys(PAGES).find(v => !$(`#view-${v}`).hidden);
 document.addEventListener("viewshown", e => PAGES[e.detail]?.());
+PHONE.addEventListener("change", () => { closeDay(); render(); fit(); const v = visible(); if (v) PAGES[v](); });
 for (const id of ["#profs-mx", "#pc-mx"]) new ResizeObserver(() => { const v = visible(); if (v === "profs" || v === "parcours") PAGES[v](); }).observe($(id));

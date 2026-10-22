@@ -8,6 +8,7 @@ const PERIODE = { "P1-1": "fin nov. → début janv.", "P1-2": "janv.", "P2-1": 
 const IMPOSE = {}; // P1-1 -> partie 2 imposée
 for (const m of Object.values(M)) if (m.campagne === "P1-1" && m.suite_imposee) IMPOSE[m.code] = m.suite;
 const STORE = "voeux-p1p2-2026";
+const PHONE = matchMedia("(max-width: 760px)"); // interface téléphone : une campagne à la fois, fiche en volet, agenda
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -137,8 +138,14 @@ function notes(m) { // 2e ligne de la carte : du texte simple, pas de pastilles
 }
 
 /* ---------------- Rendu : colonnes ---------------- */
+const curCamp = () => S.mcamp || "P1-1";
+const campOf = k => CAMPS.find(c => S.order[c].includes(k));
 function render() {
   const { st } = analyze();
+  $("#mcamps").innerHTML = CAMPS.map(c => {
+    const n = S.order[c].filter(k => st[k]).length, bad = S.order[c].some(k => st[k]?.lvl === "bad");
+    return `<button role="tab" data-mcamp="${c}" aria-pressed="${c === curCamp()}">${c}${n ? ` <span class="tag ${bad ? "bad" : "risk"}">${bad ? "✕" : "!"}${n}</span>` : ""}</button>`;
+  }).join("");
   $("#columns").innerHTML = CAMPS.map(c => {
     const o = S.order[c], j = o.findIndex(k => codeOf(k) === "JOKER");
     let pre = "";
@@ -146,11 +153,12 @@ function render() {
       const top = codeOf(S.order["P1-1"][0]);
       if (IMPOSE[top]) pre = `<div class="imposed" data-key="${IMPOSE[top]}" role="button" tabindex="0" style="${dcol(IMPOSE[top])}">Si tu obtiens <b>${esc(top)}</b>, ton P1-2 sera <b>${esc(IMPOSE[top])}</b> d'office. Sinon, ce classement s'applique :</div>`;
     }
-    return `<div class="col" data-camp="${c}">
+    return `<div class="col ${c === curCamp() ? "cur" : ""}" data-camp="${c}">
       <div class="col-head"><h2>${c}</h2><span class="faint">${PERIODE[c]}</span>${issues(c, st)}</div>
       ${pre}<div class="list">${o.map((k, i) => cardHTML(k, i, j, st[k])).join("")}</div></div>`;
   }).join("");
   renderDetail(S.pinned || hoverKey || null);
+  document.body.classList.toggle("sheet-open", PHONE.matches && !!S.pinned);
   renderCalendar();
 }
 function issues(c, st) { // ✕ n / ! n dans l'en-tête de colonne, détail au survol
@@ -159,24 +167,25 @@ function issues(c, st) { // ✕ n / ! n dans l'en-tête de colonne, détail au s
   const bad = list.filter(x => x.lvl === "bad").length, lvl = bad ? "bad" : "risk";
   return `<span class="tag ${lvl}" title="${esc([...new Set(list.map(x => x.msg))].join("\n"))}">${bad ? `✕ ${bad}` : `! ${list.length}`} à revoir</span>`;
 }
+const HANDLE = `<span class="handle" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M3 5h10M3 8h10M3 11h10"/></svg></span>`;
 const MOVE = `<div class="move"><button data-mv="-1" tabindex="-1" aria-label="Monter">▲</button><button data-mv="1" tabindex="-1" aria-label="Descendre">▼</button></div>`;
 function cardHTML(k, i, j, s) {
   const m = M[k], below = j >= 0 && i > j;
   if (m.code === "JOKER") {
     return `<div class="card joker ${S.pinned === k ? "pinned" : ""}" data-key="${k}" tabindex="0" title="Déplace JOKER : rien de ce qui est en dessous ne sera attribué">
-      <span class="jk">JOKER</span><span class="jt">rien en dessous ne sera attribué</span>${MOVE}</div>`;
+      <span class="jk">JOKER</span><span class="jt">rien en dessous ne sera attribué</span>${HANDLE}${MOVE}</div>`;
   }
   const cls = ["card", below && "below", s && s.lvl, S.pinned === k && "pinned"].filter(Boolean).join(" ");
   const ic = s ? `<span class="state-ic ${s.lvl}">${s.lvl === "bad" ? "✕" : "!"}</span>` : "";
   return `<div class="${cls}" data-key="${k}" tabindex="0" style="${dcol(k)}" ${s ? `title="${esc(s.msg)}"` : ""}>
     <div class="l1"><i class="sw"></i>${ic}<span class="code">${esc(m.code)}</span><span class="ttl">${esc(m.titre)}</span></div>
-    <div class="l2"><span class="nt" ${SAME[k] && !s ? `title="${esc(sameNote(k))}"` : ""}>${s ? `<span class="st-msg">${esc(s.short)}</span>` : esc(notes(m))}</span>${diffHTML(m.avis.charge)}</div>${MOVE}
+    <div class="l2"><span class="nt" ${SAME[k] && !s ? `title="${esc(sameNote(k))}"` : ""}>${s ? `<span class="st-msg">${esc(s.short)}</span>` : esc(notes(m))}</span>${diffHTML(m.avis.charge)}</div>${HANDLE}${MOVE}
   </div>`;
 }
 function renderLegend() {
   $("#legend").innerHTML = Object.entries(DOM).map(([d, l]) => `<span class="lg"><i style="--dc:var(--d-${d})"></i>${l}</span>`).join("") +
     `<span class="lg-sep"></span><span class="lg">Difficulté (avis) ${diffHTML(1)}${diffHTML(2)}${diffHTML(3)}</span>` +
-    `<span class="lg-sep"></span><span class="lg faint">glisse pour classer · clic = fiche</span>`;
+    `<span class="lg-sep"></span><span class="lg faint hint-pc">glisse pour classer · clic = fiche</span><span class="lg faint hint-phone">≡ pour déplacer · touche un module pour sa fiche</span>`;
 }
 
 /* ---------------- Rendu : fiche (panneau droit) ---------------- */
@@ -191,6 +200,22 @@ function ruleText(m) {
   if (m.code === "NET4106") return "Même cours en P2-1 (anglais) et P2-2 (français) : une seule fois.";
   if (m.code === "NET4201") return "Ne bloque pas P1-2 : le duo habituel est NET4203.";
   return "";
+}
+function mvBar(k) { // téléphone : déplacer le module depuis sa fiche
+  const c = campOf(k); if (!PHONE.matches || S.pinned !== k || !c) return "";
+  const o = S.order[c], i = o.indexOf(k), j = o.findIndex(x => codeOf(x) === "JOKER"), isJ = codeOf(k) === "JOKER";
+  const pos = isJ ? `JOKER en position ${i + 1} sur ${o.length}` : i < j ? `Vœu n° ${i + 1} en ${c}` : `Sous JOKER en ${c} : jamais attribué`;
+  return `<div class="mv-bar"><span class="pos">${pos}</span><div class="mv-btns">
+    <button class="ghost" data-mvs="-1" ${i === 0 ? "disabled" : ""} aria-label="Monter">▲ Monter</button>
+    <button class="ghost" data-mvs="1" ${i === o.length - 1 ? "disabled" : ""} aria-label="Descendre">▼ Descendre</button>
+    ${isJ ? "" : i < j ? `<button class="ghost" data-mvs="top" ${i === 0 ? "disabled" : ""}>En 1er</button><button class="ghost" data-mvs="out">Sous JOKER</button>`
+      : `<button class="ghost" data-mvs="in">Au-dessus de JOKER</button>`}
+  </div></div>`;
+}
+function moveTo(c, k, to) {
+  const o = S.order[c].filter(x => x !== k), j = o.findIndex(x => codeOf(x) === "JOKER");
+  const at = { top: 0, out: j + 1, in: j }[to] ?? Math.max(0, Math.min(o.length, S.order[c].indexOf(k) + +to));
+  o.splice(at, 0, k); S.order[c] = o; save(); render();
 }
 const fact = (label, value, sub) => `<div class="fact"><span class="fl">${label}</span><span class="fv">${value}</span><span class="fs">${sub}</span></div>`;
 function factsHTML(m) {
@@ -217,7 +242,7 @@ function renderDetail(k) {
   el.setAttribute("style", dcol(k));
   const close = S.pinned === k ? `<button class="d-close" data-unpin title="Fermer (Échap)" aria-label="Fermer">✕</button>` : "";
   if (m.code === "JOKER") {
-    el.innerHTML = `<div class="d-head"><div class="d-top"><span>${m.campagne}</span>${close}</div><h3>JOKER</h3></div>
+    el.innerHTML = `<div class="d-head"><div class="d-top"><span>${m.campagne}</span>${close}</div><h3>JOKER</h3></div>${mvBar(k)}
       <div class="d-body"><div class="rule">${esc(rule)}</div><p class="small muted">Monte JOKER pour dire « je préfère ne rien avoir plutôt que ces modules-là ».</p></div>`;
     return;
   }
@@ -226,7 +251,7 @@ function renderDetail(k) {
     <div class="d-top"><span class="d-dom"><i></i>${DOM[domOf(k)]}</span><span>${m.code === "DIV4201" ? "toutes campagnes" : esc(m.campagne)} · ${PERIODE[m.campagne]}</span>${close}</div>
     <h3><span class="mono">${esc(m.code)}</span> ${esc(m.titre)}</h3>
     <div class="meta">${resp ? `Responsable : ${esc(resp)}` : ""}${m.fiche ? `${resp ? " · " : ""}<a href="${esc(m.fiche)}" target="_blank" rel="noopener">fiche officielle ↗</a>` : ""}</div>
-  </div>${factsHTML(m)}<div class="d-body">`;
+  </div>${mvBar(k)}${factsHTML(m)}<div class="d-body">`;
   if (s) h += `<div class="rule ${s.lvl}"><span class="state-ic ${s.lvl}">${s.lvl === "bad" ? "✕" : "!"}</span>${esc(s.msg)}</div>`;
   if (rule) h += `<div class="rule">${esc(rule)}</div>`;
   for (const x of SAME[k] || []) {
@@ -296,6 +321,7 @@ function pin(k) { S.pinned = S.pinned === k ? null : k; render(); }
 $("#columns").addEventListener("pointerdown", e => {
   const card = e.target.closest(".card");
   if (!card || e.button !== 0 || e.target.closest(".move")) return;
+  if (PHONE.matches && !e.target.closest(".handle")) return; // ailleurs sur la carte : le doigt fait défiler la page
   drag = { card, key: card.dataset.key, camp: card.closest(".col").dataset.camp, y0: e.clientY, on: false };
 });
 document.addEventListener("pointermove", e => {
@@ -310,23 +336,33 @@ document.addEventListener("pointermove", e => {
     drag.card.classList.add("dragging");
   }
   drag.card.style.top = e.clientY - drag.dy + "px";
+  if (PHONE.matches) { if (e.clientY < 110) scrollBy(0, -10); else if (e.clientY > innerHeight - 120) scrollBy(0, 10); }
   const list = drag.ph.parentElement;
   const next = [...list.querySelectorAll(".card:not(.dragging)")].find(c => { const r = c.getBoundingClientRect(); return e.clientY < r.top + r.height / 2; });
   next ? list.insertBefore(drag.ph, next) : list.appendChild(drag.ph);
 });
-document.addEventListener("pointerup", () => {
+function endDrag() {
   if (!drag) return;
   const d = drag; drag = null;
-  if (!d.on) { pin(d.key); return; }
+  if (!d.on) { if (!PHONE.matches) pin(d.key); return; }
   S.order[d.camp] = [...d.ph.parentElement.children].filter(el => el !== d.card).map(el => (el === d.ph ? d.key : el.dataset.key));
   save(); render();
-});
+}
+document.addEventListener("pointerup", endDrag);
+document.addEventListener("pointercancel", endDrag);
 $("#columns").addEventListener("click", e => {
   const b = e.target.closest("[data-mv]");
   if (b) { const card = b.closest(".card"); move(card.closest(".col").dataset.camp, card.dataset.key, +b.dataset.mv); return; }
   const imp = e.target.closest(".imposed");
-  if (imp) pin(imp.dataset.key);
+  if (imp) { pin(imp.dataset.key); return; }
+  const card = e.target.closest(".card");
+  if (PHONE.matches && card && !e.target.closest(".handle")) pin(card.dataset.key); // téléphone : toucher = ouvrir la fiche
 });
+$("#mcamps").addEventListener("click", e => {
+  const b = e.target.closest("[data-mcamp]"); if (!b) return;
+  S.mcamp = b.dataset.mcamp; render(); scrollTo({ top: 0 });
+});
+$("#sheet-bg").addEventListener("click", () => { S.pinned = null; render(); });
 $("#columns").addEventListener("keydown", e => {
   const card = e.target.closest(".card, .imposed");
   if (!card) return;
@@ -349,6 +385,8 @@ $("#columns").addEventListener("focusin", e => {
 document.addEventListener("keydown", e => { if (e.key === "Escape" && S.pinned && !$("#avis-modal").open) { S.pinned = null; render(); } });
 $("#detail").addEventListener("click", e => {
   if (e.target.closest("[data-unpin]")) { S.pinned = null; render(); return; }
+  const mv = e.target.closest("[data-mvs]");
+  if (mv && S.pinned) { moveTo(campOf(S.pinned), S.pinned, mv.dataset.mvs); return; }
   const b = e.target.closest("[data-avis]"); if (!b) return;
   const m = M[b.dataset.avis];
   $("#avis-title").textContent = `Avis · ${m.code} ${m.titre}`;
@@ -409,13 +447,20 @@ function renderDeadline() {
   const end = new Date(D.date_limite), ms = end - new Date(), el = $("#deadline");
   if (ms <= 0) { el.textContent = "Campagne clôturée"; el.classList.add("soon"); return; }
   const d = Math.floor(ms / 864e5), h = Math.floor((ms % 864e5) / 36e5);
-  el.textContent = `Clôture 25 oct. 18:00 · ${d ? `${d} j ` : ""}${h} h`;
+  el.innerHTML = `<span class="wide">Clôture 25 oct. 18:00 · </span>${d ? `${d} j ` : ""}${h} h`;
+  el.title = "Clôture des vœux : 25 oct. 18:00";
   el.classList.toggle("soon", ms < 48 * 36e5);
 }
 
 /* ---------------- Onglets ---------------- */
+$("#menu").addEventListener("click", () => {
+  const open = !$(".top").classList.contains("menu-open");
+  $(".top").classList.toggle("menu-open", open); $("#menu").setAttribute("aria-expanded", open);
+});
+document.addEventListener("click", e => { if (!e.target.closest("#menu, .actions")) { $(".top").classList.remove("menu-open"); $("#menu").setAttribute("aria-expanded", "false"); } });
 document.querySelector(".tabs").addEventListener("click", e => {
   const b = e.target.closest("[data-view]"); if (!b) return;
+  if (PHONE.matches) scrollTo({ top: 0 });
   for (const t of document.querySelectorAll(".tabs button")) t.setAttribute("aria-selected", t === b);
   for (const v of document.querySelectorAll("main.view")) v.hidden = v.id !== `view-${b.dataset.view}`;
   document.dispatchEvent(new CustomEvent("viewshown", { detail: b.dataset.view }));
@@ -476,6 +521,9 @@ function renderCalendar() {
   const isVac = d => iso(d) >= "2026-12-21" && iso(d) <= "2026-12-28";
   const weeks = mondays.filter((d, i) => !isVac(d) || !isVac(mondays[i - 1] || new Date(0)));
   const days = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi"];
+  const grid = $("#cal-grid");
+  if (PHONE.matches) { grid.removeAttribute("style"); grid.className = "cal-grid agenda"; grid.innerHTML = agendaHTML(weeks, iso, isVac); } else {
+  grid.className = "cal-grid";
   let g = `<div class="h corner">semaine du</div>` + weeks.map(w => `<div class="h">${isVac(w) ? "vac." : fmtDM(iso(w))}</div>`).join("");
   for (let di = 0; di < 5; di++) for (const h of ["am", "pm"]) {
     g += `<div class="rowh ${h}">${h === "am" ? `<b>${days[di]}</b> matin` : "après-midi"}</div>`;
@@ -490,12 +538,12 @@ function renderCalendar() {
       }</div>`;
     }
   }
-  const grid = $("#cal-grid");
   grid.style.gridTemplateRows = "auto repeat(10, minmax(0, 1fr))";
   grid.style.gridTemplateColumns = `118px ${weeks.map(w => (isVac(w) ? "40px" : "minmax(70px,1fr)")).join(" ")}`;
   grid.innerHTML = g;
   grid.classList.toggle("many", mode !== "sel");
   clampCells();
+  }
 
   const evals = chosen.flatMap(({ m }) => m.seances.filter(s => s.eval).map(s => ({ m, s })));
   const est = chosen.filter(({ m }) => m.seances_estimees);
@@ -527,6 +575,27 @@ $("#cal-picks").addEventListener("click", e => {
   if (m) { S.calMode = m.dataset.calmode; save(); renderCalendar(); return; }
   if (e.target.closest("[data-calpromo]")) { S.calPromo = S.calPromo === false; save(); renderCalendar(); }
 });
+
+/* Téléphone : agenda, une ligne par cours, groupé par semaine puis par jour */
+function agendaHTML(weeks, iso, isVac) {
+  const row = e => {
+    const mine = e.kind === "mine", m = mine ? M[e.k] : null;
+    return `<div class="ag-row ${e.kind} ${e.s.eval && mine ? "isev" : ""} ${e.with.length ? "conflict" : ""} ${e.est ? "est" : ""}" ${mine ? `style="${dcol(e.k)}"` : ""}>
+      <span class="t">${e.s.debut}<span class="faint">${e.s.fin}</span></span>
+      <span class="w">${mine ? `<i class="sw"></i>` : ""}<b>${e.s.eval ? "◆ " : ""}${esc(mine ? m.code : e.code)}</b> <span class="faint">${mine ? esc(m.campagne) : "promo"}</span>
+        ${mine ? `<span class="ttl">${esc(m.titre)}</span>` : ""}${e.s.eval && mine ? `<span class="faint">${esc(e.s.label)}</span>` : ""}
+        ${e.with.length ? `<span class="ov">en même temps que ${e.with.map(o => esc(o.code)).join(", ")}</span>` : ""}</span></div>`;
+  };
+  const byTime = (a, b) => a.s.debut.localeCompare(b.s.debut) || (a.kind === "promo") - (b.kind === "promo");
+  return weeks.map(w => {
+    if (isVac(w)) return `<div class="ag-week"><div class="ag-wh">Vacances de Noël</div></div>`;
+    const days = [0, 1, 2, 3, 4].map(di => { const d = new Date(w); d.setDate(d.getDate() + di); return d; })
+      .filter(d => CAL_DAYS[iso(d)]?.length)
+      .map(d => { const l = d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "short" });
+        return `<div class="ag-day"><div class="ag-date">${l.charAt(0).toUpperCase() + l.slice(1)}</div>${CAL_DAYS[iso(d)].slice().sort(byTime).map(row).join("")}</div>`; });
+    return `<div class="ag-week"><div class="ag-wh">Semaine du ${fmtDM(iso(w))}</div>${days.join("") || `<p class="faint small pad">Rien cette semaine.</p>`}</div>`;
+  }).join("");
+}
 
 /* Case trop pleine : on masque ce qui dépasse et on affiche « +n » (le détail au clic montre tout) */
 function clampCells() {
@@ -585,7 +654,7 @@ document.addEventListener("viewshown", closeDay);
 
 /* ---------------- Tout tenir dans l'écran ---------------- */
 function fit() { // jusqu'à 11 lignes par colonne : hauteur disponible répartie (36 à 50 px)
-  const cols = $("#columns"); if (!cols.clientHeight) return;
+  const cols = $("#columns"); if (!cols.clientHeight || PHONE.matches) return;
   const max = Math.max(...CAMPS.map(c => S.order[c].length));
   const h = Math.floor((cols.clientHeight - 36) / max); // en-tête de colonne 33 px + bordures ; filets compris dans la hauteur
   document.documentElement.style.setProperty("--card-h", `${Math.max(36, Math.min(50, h))}px`);
@@ -594,7 +663,7 @@ new ResizeObserver(fit).observe($("#columns"));
 
 function renderTheme() {
   const dark = document.documentElement.dataset.theme === "dark";
-  $("#theme").textContent = dark ? "☀" : "☾"; $("#theme").title = dark ? "Passer en mode clair" : "Passer en mode sombre";
+  $("#theme").innerHTML = dark ? `☀<span class="ph"> Mode clair</span>` : `☾<span class="ph"> Mode sombre</span>`; $("#theme").title = dark ? "Passer en mode clair" : "Passer en mode sombre";
 }
 $("#theme").addEventListener("click", () => {
   const t = document.documentElement.dataset.theme === "dark" ? "light" : "dark";

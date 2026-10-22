@@ -2,22 +2,24 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1e2a47">
 <title>Mes vœux P1/P2 2026</title>
 <script>document.documentElement.dataset.theme = localStorage.getItem("voeux-theme") || "light";</script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header class="top">
-  <h1>Mes vœux P1/P2 2026</h1>
+  <h1>Mes vœux<span class="wide"> P1/P2 2026</span></h1>
   <span id="deadline" class="deadline"></span>
   <nav class="tabs" role="tablist">
-    <button role="tab" data-view="classement" aria-selected="true">Classement</button>
-    <button role="tab" data-view="calendrier" aria-selected="false">Calendrier</button>
-    <button role="tab" data-view="comparer" aria-selected="false">Comparer</button>
-    <button role="tab" data-view="profs" aria-selected="false">Profs</button>
-    <button role="tab" data-view="parcours" aria-selected="false">Parcours 25-26</button>
+    <button role="tab" data-view="classement" aria-selected="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></svg><span>Classement</span></button>
+    <button role="tab" data-view="calendrier" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg><span>Calendrier</span></button>
+    <button role="tab" data-view="comparer" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="7" height="16" rx="1.5"/><rect x="13.5" y="4" width="7" height="16" rx="1.5"/></svg><span>Comparer</span></button>
+    <button role="tab" data-view="profs" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c.6-3.6 3-5.5 6-5.5s5.4 1.9 6 5.5M16 5.2a3 3 0 0 1 0 5.6M18 14.8c1.7.7 2.7 2.4 3 5.2"/></svg><span>Profs</span></button>
+    <button role="tab" data-view="parcours" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20h18M6 20v-7M11 20V5M16 20v-10M20.5 20v-4"/></svg><span>Parcours<span class="wide"> 25-26</span></span></button>
   </nav>
+  <button id="menu" class="ghost menu-btn" aria-label="Options" aria-expanded="false">⋯</button>
   <div class="actions">
     <select id="preset" aria-label="Charger un parcours type">
       <option value="">Parcours type…</option>
@@ -29,9 +31,11 @@
 
 <main id="view-classement" class="view layout">
   <section class="board">
+    <div id="mcamps" class="seg mcamps" role="tablist" aria-label="Campagne"></div>
     <div id="legend" class="legend"></div>
     <div id="columns" class="columns"></div>
   </section>
+  <div id="sheet-bg" class="sheet-bg"></div>
   <aside id="detail" class="detail" aria-live="polite"></aside>
 </main>
 
