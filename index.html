@@ -29,11 +29,7 @@
 
 <main id="view-classement" class="view layout">
   <section class="board">
-    <div class="board-top">
-      <span class="small muted">Filières visées <span class="faint">(3 max)</span></span>
-      <div id="targets" class="targets"></div>
-      <span id="legend" class="legend"></span>
-    </div>
+    <div id="legend" class="legend"></div>
     <div id="columns" class="columns"></div>
   </section>
   <aside id="detail" class="detail" aria-live="polite"></aside>
@@ -51,8 +47,8 @@
 <main id="view-comparer" class="view cmp-view" hidden>
   <div class="cmp-bar">
     <div class="seg" id="cmp-camps" role="group" aria-label="Campagne"></div>
-    <div id="cmp-chips" class="targets"></div>
-    <span class="faint small">4 modules max · clic sur un nom = sa fiche dans Classement</span>
+    <div id="cmp-chips" class="chips"></div>
+    <span class="faint small">4 modules max</span>
   </div>
   <div id="cmp-grid" class="cmp-grid"></div>
 </main>
@@ -61,7 +57,7 @@
   <section class="mx-wrap">
     <div class="mx-head">
       <h2>Qui enseigne en P1/P2 et dans une VAP ?</h2>
-      <span class="small muted"><b>●</b> un prof du module est <b>responsable</b> d'un module de la VAP · <b>○</b> il est dans l'<b>équipe</b> · clic sur une case ou une filière</span>
+      <span class="mx-key"><span><b class="mk r">●</b> un prof du module est <b>responsable</b> dans la VAP</span><span><b class="mk">○</b> il fait partie de l'<b>équipe</b></span><span class="faint">clic sur une case, un module ou une filière</span></span>
     </div>
     <div id="profs-mx" class="mx"></div>
   </section>
