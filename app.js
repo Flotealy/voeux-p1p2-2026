@@ -358,6 +358,14 @@ $("#detail").addEventListener("click", e => {
 });
 
 /* ---------------- En-tête : parcours types, réinitialisation ---------------- */
+// Score des parcours automatiques = part de la filière qui avait pris le module en 2025-26.
+// Exception MAT4101 : ses chiffres viennent du DA4101, pris par ~74 % de toute la promo. On ne garde que l'écart
+// au-dessus de cette moyenne (ramené sur 0-1) ; sinon il passerait en tête de P2-2 pour presque toutes les filières.
+const DA_AVG = (() => { const s = M.MAT4101?.stats; if (!s) return 0; const b = D.filieres.reduce((t, f) => t + s.base[f], 0); return b ? D.filieres.reduce((t, f) => t + s.vers[f], 0) / b : 0; })();
+function presetScore(k, f) {
+  const v = taken(M[k], f) || 0;
+  return codeOf(k) === "MAT4101" ? Math.max(0, v - DA_AVG) / (1 - DA_AVG) : v;
+}
 $("#preset").innerHTML += D.filieres.map(f => `<option value="${f}">${f}${D.parcours[f] ? "" : " (auto, d'après 2025-26)"}</option>`).join("");
 $("#preset").addEventListener("change", e => {
   const f = e.target.value; if (!f) return;
@@ -365,7 +373,7 @@ $("#preset").addEventListener("change", e => {
   for (const c of CAMPS) {
     const all = [...D.campagnes[c].ordre];
     if (D.parcours[f]) tops[c] = (D.parcours[f][c] || []).map(code => all.find(k => codeOf(k) === code)).filter(Boolean);
-    else tops[c] = all.filter(k => codeOf(k) !== "JOKER" && (taken(M[k], f) || 0) > 0).sort((a, b) => taken(M[b], f) - taken(M[a], f));
+    else tops[c] = all.filter(k => codeOf(k) !== "JOKER" && presetScore(k, f) > 0).sort((a, b) => presetScore(b, f) - presetScore(a, f));
     if (c !== "P1-1") tops[c] = tops[c].filter(k => codeOf(k) !== "DIV4201"); // DIV4201 : une seule fois
   }
   tops["P2-2"] = tops["P2-2"].filter(k => !(k === "NET4106@P2-2" && tops["P2-1"].includes("NET4106@P2-1")));
