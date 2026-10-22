@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mes vœux P1/P2 2026</title>
+<script>document.documentElement.dataset.theme = localStorage.getItem("voeux-theme") || "light";</script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <h1>Mes vœux P1/P2 2026</h1>
+  <span id="deadline" class="deadline"></span>
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-view="classement" aria-selected="true">Classement</button>
+    <button role="tab" data-view="calendrier" aria-selected="false">Calendrier</button>
+    <button role="tab" data-view="comparer" aria-selected="false">Comparer</button>
+    <button role="tab" data-view="profs" aria-selected="false">Profs</button>
+    <button role="tab" data-view="parcours" aria-selected="false">Parcours 25-26</button>
+  </nav>
+  <div class="actions">
+    <select id="preset" aria-label="Charger un parcours type">
+      <option value="">Parcours type…</option>
+    </select>
+    <button id="reset" class="ghost" title="Revenir à l'ordre de la campagne">Réinitialiser</button>
+    <button id="theme" class="ghost" title="Changer de thème" aria-label="Changer de thème"></button>
+  </div>
+</header>
+
+<main id="view-classement" class="view layout">
+  <section class="board">
+    <div class="board-top">
+      <span class="small muted">Filières visées <span class="faint">(3 max)</span></span>
+      <div id="targets" class="targets"></div>
+      <span id="legend" class="legend"></span>
+    </div>
+    <div id="columns" class="columns"></div>
+  </section>
+  <aside id="detail" class="detail" aria-live="polite"></aside>
+</main>
+
+<main id="view-calendrier" class="view" hidden>
+  <div class="cal-head">
+    <div id="cal-picks" class="cal-picks"></div>
+    <div id="cal-legend" class="cal-legend small"></div>
+  </div>
+  <div id="cal-summary" class="cal-summary"></div>
+  <div id="cal-grid" class="cal-grid"></div>
+</main>
+
+<main id="view-comparer" class="view cmp-view" hidden>
+  <div class="cmp-bar">
+    <div class="seg" id="cmp-camps" role="group" aria-label="Campagne"></div>
+    <div id="cmp-chips" class="targets"></div>
+    <span class="faint small">4 modules max · clic sur un nom = sa fiche dans Classement</span>
+  </div>
+  <div id="cmp-grid" class="cmp-grid"></div>
+</main>
+
+<main id="view-profs" class="view split" hidden>
+  <section class="mx-wrap">
+    <div class="mx-head">
+      <h2>Qui enseigne en P1/P2 et dans une VAP ?</h2>
+      <span class="small muted"><b>●</b> un prof du module est <b>responsable</b> d'un module de la VAP · <b>○</b> il est dans l'<b>équipe</b> · clic sur une case ou une filière</span>
+    </div>
+    <div id="profs-mx" class="mx"></div>
+  </section>
+  <aside id="profs-side" class="detail"></aside>
+</main>
+
+<main id="view-parcours" class="view split" hidden>
+  <section class="mx-wrap">
+    <div class="mx-head">
+      <h2 id="pc-title"></h2>
+      <div class="seg" id="pc-mode" role="group" aria-label="Lecture">
+        <button data-mode="pris" aria-pressed="true">Ce qu'ils avaient pris</button>
+        <button data-mode="vers" aria-pressed="false">Où sont allés ceux qui l'ont pris</button>
+      </div>
+      <span id="pc-hint" class="small muted"></span>
+    </div>
+    <div id="pc-mx" class="mx"></div>
+  </section>
+  <aside id="pc-side" class="detail"></aside>
+</main>
+
+<dialog id="avis-modal">
+  <form method="dialog" class="modal-head"><h2 id="avis-title"></h2><button class="ghost" aria-label="Fermer">✕</button></form>
+  <div id="avis-body" class="modal-body"></div>
+</dialog>
+<div id="toast" class="toast" role="status" hidden></div>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+<script src="pages.js"></script>
+</body>
+</html>
