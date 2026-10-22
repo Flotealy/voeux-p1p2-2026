@@ -392,7 +392,7 @@ function renderCalendar() {
   };
   $("#cal-picks").innerHTML = CAMPS.map(c => `<label style="${dcol(picks[c])}"><span><i></i>${c}</span><select data-camp="${c}">${opts(c)}</select></label>`).join("") +
     `<button class="ghost" id="cal-reset" ${S.cal ? "" : "disabled"} title="Revenir à tes premiers vœux">Mes 1ers vœux</button>`;
-  $("#cal-legend").innerHTML = `<span><span class="k mine"></span>mes modules</span><span><span class="k isev"></span>évaluation</span><span><span class="k promo"></span>reste de la promo 2A</span><span><i>italique</i> = estimé</span>`;
+  $("#cal-legend").innerHTML = `<span><span class="k mine"></span>mes modules</span><span><span class="k isev"></span>◆ évaluation</span><span><span class="k promo"></span>reste de la promo 2A (gris)</span><span><i>italique</i> = estimé</span>`;
 
   const chosen = CAMPS.map(c => ({ c, k: picks[c], m: M[picks[c]] })).filter(x => x.m && x.m.code !== "JOKER");
   const cells = {}; // date|half -> {evs:[], conflict}
@@ -422,7 +422,7 @@ function renderCalendar() {
       const key = iso(d), cell = cells[`${key}|${h}`];
       const evs = (cell?.evs || []).sort((a, b) => (a.kind === "promo") - (b.kind === "promo"));
       g += `<div class="cell ${h} ${cell?.conflict ? "conflict" : ""}" title="${fmtD(key)} ${h === "am" ? "matin" : "après-midi"}">${
-        evs.map(e => `<span class="ev ${e.kind} ${e.est ? "est" : ""} ${e.s.eval ? "isev" : ""}" ${e.k ? `style="${dcol(e.k)}"` : ""} title="${esc(e.s.titre || e.code)} · ${e.s.debut}-${e.s.fin}${e.s.n > 1 ? ` · ${e.s.n} groupes/jurys en parallèle` : ""}${e.est ? " · créneau estimé" : ""}">${e.s.eval ? "◆ " : ""}${esc(e.code)}</span>`).join("")
+        evs.map(e => `<span class="ev ${e.kind} ${e.est ? "est" : ""} ${e.s.eval ? "isev" : ""}" ${e.k ? `style="${dcol(e.k)}"` : ""} title="${esc(e.s.titre || e.code)} · ${e.s.debut}-${e.s.fin}${e.s.n > 1 ? ` · ${e.s.n} groupes/jurys en parallèle` : ""}${e.est ? " · créneau estimé" : ""}">${e.k ? `<i class="sw"></i>` : ""}${e.s.eval ? "◆ " : ""}${esc(e.code)}</span>`).join("")
       }</div>`;
     }
   }

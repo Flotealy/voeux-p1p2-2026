@@ -47,9 +47,9 @@ function matrix(el, { cell, colHead, rowExtra = () => "", footer = null, sel = {
   }
   el.innerHTML = h;
   el.style.gridTemplateRows = tpl.join(" ");
-  const n = tpl.length - 1 - groups, hgt = el.clientHeight; // lignes de données ; 6 px par séparateur, 1 px d'écart partout
+  const n = tpl.length - 1 - groups, hgt = el.clientHeight; // lignes de données ; 6 px par séparateur
   if (!hgt) return;
-  const rh = Math.max(12, Math.min(26, Math.floor((hgt - 34 - groups * 6 - tpl.length) / n)));
+  const rh = Math.max(12, Math.min(26, Math.floor((hgt - 34 - groups * 6 - 2) / n)));
   el.style.setProperty("--row-h", `${rh}px`);
   el.classList.toggle("dense", rh < 15);
 }
