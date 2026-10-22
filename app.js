@@ -140,7 +140,7 @@ function cardHTML(k, i, j, s) {
   const cls = ["card", below && "below", s && s.lvl, S.pinned === k && "pinned"].filter(Boolean).join(" ");
   const ic = s ? `<span class="state-ic ${s.lvl}">${s.lvl === "bad" ? "✕" : "!"}</span>` : "";
   return `<div class="${cls}" data-key="${k}" tabindex="0" style="${dcol(k)}" ${s ? `title="${esc(s.msg)}"` : ""}>
-    <div class="l1">${ic}<span class="code">${esc(m.code)}</span><span class="ttl">${esc(m.titre)}</span></div>
+    <div class="l1"><i class="sw"></i>${ic}<span class="code">${esc(m.code)}</span><span class="ttl">${esc(m.titre)}</span></div>
     <div class="l2"><span class="nt">${s ? `<span class="st-msg">${esc(s.short)}</span>` : esc(notes(m))}</span>${diffHTML(m.avis.charge)}</div>${MOVE}
   </div>`;
 }
@@ -453,10 +453,10 @@ $("#cal-picks").addEventListener("change", e => {
 $("#cal-picks").addEventListener("click", e => { if (e.target.id === "cal-reset") { S.cal = null; save(); renderCalendar(); } });
 
 /* ---------------- Tout tenir dans l'écran ---------------- */
-function fit() { // jusqu'à 11 cartes par colonne : hauteur disponible répartie (36 à 50 px)
+function fit() { // jusqu'à 11 lignes par colonne : hauteur disponible répartie (36 à 50 px)
   const cols = $("#columns"); if (!cols.clientHeight) return;
   const max = Math.max(...CAMPS.map(c => S.order[c].length));
-  const h = Math.floor((cols.clientHeight - 28 - (max - 1) * 4) / max);
+  const h = Math.floor((cols.clientHeight - 36) / max); // en-tête de colonne 33 px + bordures ; filets compris dans la hauteur
   document.documentElement.style.setProperty("--card-h", `${Math.max(36, Math.min(50, h))}px`);
 }
 new ResizeObserver(fit).observe($("#columns"));
