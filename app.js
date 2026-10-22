@@ -314,7 +314,7 @@ $("#detail").addEventListener("click", e => {
   const b = e.target.closest("[data-avis]"); if (!b) return;
   const m = M[b.dataset.avis];
   $("#avis-title").textContent = `Avis bruts · ${m.code} ${m.titre}`;
-  $("#avis-body").innerHTML = `<p class="small faint">Textes copiés tels quels (Discord, guide S7). Ce sont des avis anciens : la campagne 2026 fait foi.</p>` +
+  $("#avis-body").innerHTML = `<p class="small faint">Textes d'origine (Discord, pseudos anonymisés ; guide S7). Ce sont des avis parfois anciens : la campagne 2026 fait foi.</p>` +
     m.avis.textes.map(t => `<h5>${esc(t.source)}</h5><pre>${esc(t.texte.trim())}</pre>`).join("");
   $("#avis-modal").showModal();
 });
