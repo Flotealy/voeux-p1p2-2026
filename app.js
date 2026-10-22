@@ -39,7 +39,7 @@ function campaignOrder(c) {
   return [...o.slice(0, j).filter(k => !out(k)), o[j], ...o.slice(0, j).filter(out), ...o.slice(j + 1)];
 }
 function defaultState() {
-  return { order: Object.fromEntries(CAMPS.map(c => [c, campaignOrder(c)])), pinned: null, cal: null };
+  return { order: Object.fromEntries(CAMPS.map(c => [c, campaignOrder(c)])), pinned: null, cal: null, calMode: "tout", calPromo: true };
 }
 let S = load();
 function load() {
@@ -47,11 +47,11 @@ function load() {
     const s = JSON.parse(localStorage.getItem(STORE));
     const ok = s && CAMPS.every(c => Array.isArray(s.order?.[c]) &&
       s.order[c].length === D.campagnes[c].ordre.length && s.order[c].every(k => M[k]));
-    if (ok) return { ...defaultState(), order: s.order, cal: s.cal || null };
+    if (ok) return { ...defaultState(), order: s.order, cal: s.cal || null, calMode: s.calMode || "tout", calPromo: s.calPromo !== false };
   } catch (_) { /* état corrompu : on repart de zéro */ }
   return defaultState();
 }
-const save = () => localStorage.setItem(STORE, JSON.stringify({ order: S.order, cal: S.cal }));
+const save = () => localStorage.setItem(STORE, JSON.stringify({ order: S.order, cal: S.cal, calMode: S.calMode, calPromo: S.calPromo }));
 
 /* ---------------- Règles ---------------- */
 const wanted = c => { const o = S.order[c]; const j = o.findIndex(k => codeOf(k) === "JOKER"); return o.slice(0, j < 0 ? o.length : j); };
@@ -89,6 +89,34 @@ function analyze() { // st[clé] = { lvl: bad|risk, msg (complet), short (sur la
   return { st };
 }
 
+/* ---------------- Cours sur exactement les mêmes horaires ---------------- */
+// Deux modules de campagnes différentes avec une séance au même jour, même début et même fin.
+// « ensemble » = on peut réellement obtenir les deux (sinon la mention est seulement informative).
+function together(a, b) {
+  const [x, y] = [a, b].sort((p, q) => CAMPS.indexOf(M[p].campagne) - CAMPS.indexOf(M[q].campagne));
+  if (M[x].campagne !== "P1-1" || M[y].campagne !== "P1-2") return true;
+  if (IMPOSE[codeOf(x)]) return IMPOSE[codeOf(x)] === codeOf(y);
+  return !M[y].impose_par && (!M[y].prerequis || M[y].prerequis === codeOf(x));
+}
+const SAME = {}; // clé -> [{ k, dates, ensemble }]
+{
+  const all = Object.keys(M).filter(k => codeOf(k) !== "JOKER" && !M[k].seances_estimees)
+    .flatMap(k => M[k].seances.map(s => ({ k, s })));
+  const hit = {};
+  for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) {
+    const a = all[i], b = all[j];
+    if (M[a.k].campagne === M[b.k].campagne || codeOf(a.k) === codeOf(b.k)) continue;
+    if (a.s.date !== b.s.date || a.s.debut !== b.s.debut || a.s.fin !== b.s.fin) continue;
+    for (const [p, q] of [[a.k, b.k], [b.k, a.k]]) ((hit[p] ||= {})[q] ||= new Set()).add(a.s.date);
+  }
+  for (const p in hit) SAME[p] = Object.entries(hit[p]).map(([q, d]) => ({ k: q, dates: [...d].sort(), ensemble: together(p, q) }));
+}
+const sameNote = k => {
+  const l = SAME[k]; if (!l) return "";
+  const codes = l.map(x => codeOf(x.k)).join(", ");
+  return l.some(x => x.ensemble) ? `⚠ mêmes horaires que ${codes}` : `mêmes horaires que ${codes} · jamais ensemble`;
+};
+
 /* ---------------- Indicateurs ---------------- */
 function taken(m, f) { // part des <f> de 2025-26 qui avaient pris le module
   if (!m.stats) return null;
@@ -97,6 +125,7 @@ function taken(m, f) { // part des <f> de 2025-26 qui avaient pris le module
 }
 function notes(m) { // 2e ligne de la carte : du texte simple, pas de pastilles
   const n = [`${m.places} places`];
+  if (SAME[m.key]) n.unshift(sameNote(m.key));
   if (m.suite_imposee) n.push(`+ ${m.suite} imposé en P1-2`);
   else if (m.suite && m.campagne === "P1-1") n.push(`ouvre ${m.suite} en P1-2`);
   if (m.prerequis && !m.impose_par) n.push(`exige ${m.prerequis} en P1-1`);
@@ -141,7 +170,7 @@ function cardHTML(k, i, j, s) {
   const ic = s ? `<span class="state-ic ${s.lvl}">${s.lvl === "bad" ? "✕" : "!"}</span>` : "";
   return `<div class="${cls}" data-key="${k}" tabindex="0" style="${dcol(k)}" ${s ? `title="${esc(s.msg)}"` : ""}>
     <div class="l1"><i class="sw"></i>${ic}<span class="code">${esc(m.code)}</span><span class="ttl">${esc(m.titre)}</span></div>
-    <div class="l2"><span class="nt">${s ? `<span class="st-msg">${esc(s.short)}</span>` : esc(notes(m))}</span>${diffHTML(m.avis.charge)}</div>${MOVE}
+    <div class="l2"><span class="nt" ${SAME[k] && !s ? `title="${esc(sameNote(k))}"` : ""}>${s ? `<span class="st-msg">${esc(s.short)}</span>` : esc(notes(m))}</span>${diffHTML(m.avis.charge)}</div>${MOVE}
   </div>`;
 }
 function renderLegend() {
@@ -200,6 +229,12 @@ function renderDetail(k) {
   </div>${factsHTML(m)}<div class="d-body">`;
   if (s) h += `<div class="rule ${s.lvl}"><span class="state-ic ${s.lvl}">${s.lvl === "bad" ? "✕" : "!"}</span>${esc(s.msg)}</div>`;
   if (rule) h += `<div class="rule">${esc(rule)}</div>`;
+  for (const x of SAME[k] || []) {
+    const when = x.dates.map(fmtDM).join(", ");
+    h += x.ensemble
+      ? `<div class="rule risk"><span class="state-ic risk">!</span><span>Mêmes horaires que <b>${esc(codeOf(x.k))}</b> (${esc(M[x.k].campagne)}) le ${when} : si tu as les deux, tu ne pourras pas suivre ces séances.</span></div>`
+      : `<div class="rule"><span>Mêmes horaires que <b>${esc(codeOf(x.k))}</b> (${esc(M[x.k].campagne)}) le ${when} : sans effet, tu ne peux pas obtenir les deux.</span></div>`;
+  }
 
   const a = m.avis, FR = { ok: "à jour", partiel: "en partie dépassé", obsolete: "plus valable", aucun: "aucun avis" };
   h += `<section class="sec"><h4>Avis des anciens <span class="badge ${a.fraicheur}">${FR[a.fraicheur]}</span>${a.annee ? `<span class="r">${esc(a.annee)}</span>` : ""}</h4>
@@ -384,28 +419,44 @@ function calPicks() {
   const def = { "P1-1": k1, "P1-2": p12For(k1).key, "P2-1": wanted("P2-1")[0] || S.order["P2-1"][0], "P2-2": wanted("P2-2")[0] || S.order["P2-2"][0] };
   return { ...def, ...(S.cal || {}) };
 }
+const CAL_MODES = { tout: "Tout", voeux: "Mes vœux", sel: "Ma sélection" };
+function calKeys(mode) { // modules affichés selon le filtre
+  if (mode === "sel") { const p = calPicks(); return CAMPS.map(c => p[c]).filter(k => M[k] && codeOf(k) !== "JOKER"); }
+  const keys = mode === "voeux"
+    ? CAMPS.flatMap(c => wanted(c)).flatMap(k => (M[k].campagne === "P1-1" && IMPOSE[codeOf(k)] ? [k, IMPOSE[codeOf(k)]] : [k]))
+    : Object.keys(M);
+  return [...new Set(keys)].filter(k => codeOf(k) !== "JOKER" && codeOf(k) !== "DIV4201");
+}
 function renderCalendar() {
-  const picks = calPicks();
+  const mode = S.calMode || "tout", showPromo = S.calPromo !== false, picks = calPicks();
   const opts = c => {
     const keys = c === "P1-2" ? [...new Set([...Object.values(IMPOSE), ...S.order[c]])] : S.order[c];
     return keys.map(k => `<option value="${k}" ${picks[c] === k ? "selected" : ""}>${esc(codeOf(k))}${M[k].impose_par ? " (imposé)" : ""} · ${esc(M[k].titre.slice(0, 34))}</option>`).join("");
   };
-  $("#cal-picks").innerHTML = CAMPS.map(c => `<label style="${dcol(picks[c])}"><span><i></i>${c}</span><select data-camp="${c}">${opts(c)}</select></label>`).join("") +
-    `<button class="ghost" id="cal-reset" ${S.cal ? "" : "disabled"} title="Revenir à tes premiers vœux">Mes 1ers vœux</button>`;
-  $("#cal-legend").innerHTML = `<span><span class="k mine"></span>mes modules</span><span><span class="k isev"></span>◆ évaluation</span><span><span class="k promo"></span>reste de la promo 2A (gris)</span><span><i>italique</i> = estimé</span>`;
+  $("#cal-picks").innerHTML =
+    `<div class="seg" role="group" aria-label="Modules affichés">${Object.entries(CAL_MODES).map(([v, l]) => `<button data-calmode="${v}" aria-pressed="${mode === v}">${l}</button>`).join("")}</div>
+     <button class="chip" data-calpromo aria-pressed="${showPromo}">Promo 2A</button>` +
+    (mode === "sel"
+      ? CAMPS.map(c => `<label style="${dcol(picks[c])}"><span><i></i>${c}</span><select data-camp="${c}">${opts(c)}</select></label>`).join("") +
+        `<button class="ghost" id="cal-reset" ${S.cal ? "" : "disabled"} title="Revenir à tes premiers vœux">Mes 1ers vœux</button>`
+      : `<span class="small faint">${mode === "tout" ? "tous les modules P1/P2 déjà planifiés" : "les modules classés au-dessus de JOKER, parties 2 imposées comprises"}</span>`);
+  $("#cal-legend").innerHTML = `<span><span class="k mine"></span>module (couleur de la discipline)</span><span><span class="k isev"></span>◆ évaluation</span>${showPromo ? `<span><span class="k promo"></span>promo 2A</span>` : ""}${mode === "sel" ? `<span><i>italique</i> = estimé</span>` : ""}`;
 
-  const chosen = CAMPS.map(c => ({ c, k: picks[c], m: M[picks[c]] })).filter(x => x.m && x.m.code !== "JOKER");
+  const keys = calKeys(mode);
+  // hors « Ma sélection », les créneaux estimés (modules pas encore planifiés) rempliraient toutes les cases : on les liste à part
+  const chosen = keys.map(k => ({ k, m: M[k] })).filter(x => mode === "sel" || !x.m.seances_estimees);
+  const unplanned = keys.filter(k => M[k].seances_estimees);
   const cells = {}; // date|half -> {evs:[], conflict}
   CAL_DAYS = {};    // date -> tous les événements du jour (pour le détail au clic)
   const put = (date, h, ev) => { (cells[`${date}|${h}`] ||= { evs: [] }).evs.push(ev); (CAL_DAYS[date] ||= []).push(ev); };
   for (const { k, m } of chosen) for (const s of m.seances) put(s.date, half(s.debut), { kind: "mine", k, code: m.code, s, est: m.seances_estimees });
-  for (const p of D.promo) put(p.date, half(p.debut), { kind: "promo", code: p.n > 1 ? `${p.label} ×${p.n}` : p.label, s: p });
-  // Chevauchement = un de mes modules EN MÊME TEMPS qu'un autre cours (horaires qui se recouvrent).
-  // Deux cours le même jour à des heures différentes ne comptent pas.
+  if (showPromo) for (const p of D.promo) put(p.date, half(p.debut), { kind: "promo", code: p.n > 1 ? `${p.label} ×${p.n}` : p.label, s: p });
+  // Chevauchement = un de tes modules EN MÊME TEMPS qu'un autre cours (horaires qui se recouvrent), calculé sur « Ma sélection ».
+  // En « Tout » / « Mes vœux », les modules d'une même campagne partagent volontairement leurs créneaux : pas d'alerte.
   const overlap = (a, b) => a.s.date === b.s.date && mins(a.s.debut) < mins(b.s.fin) && mins(b.s.debut) < mins(a.s.fin);
   let conflicts = 0;
   for (const evs of Object.values(CAL_DAYS)) for (const a of evs) a.with = [];
-  for (const evs of Object.values(CAL_DAYS)) evs.forEach((a, i) => evs.slice(i + 1).forEach(b => {
+  if (mode === "sel") for (const evs of Object.values(CAL_DAYS)) evs.forEach((a, i) => evs.slice(i + 1).forEach(b => {
     if ((a.kind === "mine" || b.kind === "mine") && overlap(a, b)) { a.with.push(b); b.with.push(a); conflicts++; }
   }));
   for (const cell of Object.values(cells)) cell.conflict = cell.evs.some(e => e.with.length);
@@ -424,7 +475,8 @@ function renderCalendar() {
       if (isVac(w)) { g += `<div class="cell vac ${h}" title="Vacances"></div>`; continue; }
       const d = new Date(w); d.setDate(d.getDate() + di);
       const key = iso(d), cell = cells[`${key}|${h}`];
-      const evs = (cell?.evs || []).sort((a, b) => (a.kind === "promo") - (b.kind === "promo"));
+      const evs = (cell?.evs || []).sort((a, b) => (a.kind === "promo") - (b.kind === "promo") ||
+        (a.k && b.k ? CAMPS.indexOf(M[a.k].campagne) - CAMPS.indexOf(M[b.k].campagne) || a.code.localeCompare(b.code) : 0));
       g += `<div class="cell ${h} ${cell?.conflict ? "conflict" : ""} ${CAL_DAYS[key] ? "has" : ""}" data-date="${key}" role="button" tabindex="0" title="${fmtD(key)} : clic pour le détail de la journée">${
         evs.map(e => `<span class="ev ${e.kind} ${e.est ? "est" : ""} ${e.s.eval ? "isev" : ""}" ${e.k ? `style="${dcol(e.k)}"` : ""} title="${esc(e.s.titre || e.code)} · ${e.s.debut}-${e.s.fin}${e.s.n > 1 ? ` · ${e.s.n} groupes/jurys en parallèle` : ""}${e.est ? " · créneau estimé" : ""}">${e.k ? `<i class="sw"></i>` : ""}${e.s.eval ? "◆ " : ""}${esc(e.code)}</span>`).join("")
       }</div>`;
@@ -434,6 +486,8 @@ function renderCalendar() {
   grid.style.gridTemplateRows = "auto repeat(10, minmax(0, 1fr))";
   grid.style.gridTemplateColumns = `118px ${weeks.map(w => (isVac(w) ? "40px" : "minmax(70px,1fr)")).join(" ")}`;
   grid.innerHTML = g;
+  grid.classList.toggle("many", mode !== "sel");
+  clampCells();
 
   const evals = chosen.flatMap(({ m }) => m.seances.filter(s => s.eval).map(s => ({ m, s })));
   const est = chosen.filter(({ m }) => m.seances_estimees);
@@ -442,19 +496,44 @@ function renderCalendar() {
   for (const { s } of evals) { const d = dateOf(s.date); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); (byWeek[iso(d)] ||= []).push(s); }
   const peak = Object.entries(byWeek).sort((a, b) => b[1].length - a[1].length)[0];
   const stat = (v, l, sub = "", cls = "") => `<div class="stat ${cls}"><b>${v}</b><span>${l}</span>${sub ? `<span class="faint">${sub}</span>` : ""}</div>`;
-  $("#cal-summary").innerHTML = [
+  const list = ks => ks.map(codeOf).join(", ");
+  $("#cal-summary").innerHTML = (mode === "sel" ? [
     stat(conflicts, `cours en même temps`, conflicts ? "voir les cases en rouge" : "le même jour à d'autres heures, c'est ok", conflicts ? "bad" : ""),
     stat(`${Math.round(hours)} h`, "de cours planifiées", est.length ? `+ ${est.map(x => x.m.code).join(", ")} pas encore planifié${est.length > 1 ? "s" : ""}` : ""),
     stat(evals.length, `évaluation${evals.length > 1 ? "s" : ""}`, evals.sort((a, b) => a.s.date.localeCompare(b.s.date)).map(({ m, s }) => `${m.code} ${fmtDM(s.date)}`).join(" · ")),
     peak && peak[1].length > 1 ? stat(peak[1].length, "évaluations la même semaine", `semaine du ${fmtDM(peak[0])}`, "risk") : "",
     est.some(x => x.m.evals_2526.length) ? stat("25-26", "dates d'éval. de l'an dernier", est.flatMap(x => x.m.evals_2526.map(e => `${x.m.code} ${fmtDM(e.date)}`)).join(" · ")) : "",
-  ].join("");
+  ] : [
+    stat(chosen.length, `module${chosen.length > 1 ? "s" : ""} affiché${chosen.length > 1 ? "s" : ""}`, "clic sur un jour pour le détail"),
+    stat(evals.length, `évaluation${evals.length > 1 ? "s" : ""}`, evals.sort((a, b) => a.s.date.localeCompare(b.s.date)).map(({ m, s }) => `${m.code} ${fmtDM(s.date)}`).join(" · ")),
+    unplanned.length ? stat(unplanned.length, `pas encore planifié${unplanned.length > 1 ? "s" : ""}`, list(unplanned)) : "",
+  ]).join("");
 }
 $("#cal-picks").addEventListener("change", e => {
   const sel = e.target.closest("select"); if (!sel) return;
   S.cal = { ...calPicks(), [sel.dataset.camp]: sel.value }; save(); renderCalendar();
 });
-$("#cal-picks").addEventListener("click", e => { if (e.target.id === "cal-reset") { S.cal = null; save(); renderCalendar(); } });
+$("#cal-picks").addEventListener("click", e => {
+  if (e.target.id === "cal-reset") { S.cal = null; save(); renderCalendar(); return; }
+  const m = e.target.closest("[data-calmode]");
+  if (m) { S.calMode = m.dataset.calmode; save(); renderCalendar(); return; }
+  if (e.target.closest("[data-calpromo]")) { S.calPromo = S.calPromo === false; save(); renderCalendar(); }
+});
+
+/* Case trop pleine : on masque ce qui dépasse et on affiche « +n » (le détail au clic montre tout) */
+function clampCells() {
+  for (const cell of document.querySelectorAll("#cal-grid .cell")) {
+    cell.querySelector(".more")?.remove();
+    const evs = [...cell.querySelectorAll(".ev")];
+    for (const e of evs) e.hidden = false;
+    if (cell.scrollHeight <= cell.clientHeight + 1) continue;
+    const more = document.createElement("span"); more.className = "more"; cell.append(more);
+    let n = 0;
+    for (let i = evs.length - 1; i >= 0 && cell.scrollHeight > cell.clientHeight + 1; i--) { evs[i].hidden = true; more.textContent = `+${++n}`; }
+  }
+}
+new ResizeObserver(() => { if (!$("#view-calendrier").hidden) clampCells(); }).observe($("#cal-grid"));
+document.addEventListener("viewshown", e => { if (e.detail === "calendrier") clampCells(); });
 
 /* Détail d'une journée : clic sur une case du calendrier */
 let CAL_DAYS = {}, popDate = null;
@@ -466,14 +545,15 @@ function openDay(date, anchor) {
     const what = mine ? `${esc(m.titre)}` : esc(e.s.titre || e.s.label);
     const kind = [e.s.eval ? `◆ ${esc(e.s.label)}` : esc(e.s.type || e.s.label), e.est ? "créneau estimé" : "", e.s.n > 1 ? `${e.s.n} groupes en parallèle` : ""].filter(Boolean).join(" · ");
     const ov = e.with.length ? `<div class="ov">en même temps que ${e.with.map(o => `<b>${esc(o.code)}</b> ${o.s.debut}–${o.s.fin}`).join(", ")}</div>` : "";
+    const twins = mine && !e.with.length ? evs.filter(o => o !== e && o.kind === "mine" && M[o.k].campagne !== m.campagne && o.s.debut === e.s.debut && o.s.fin === e.s.fin) : [];
+    const same = twins.length ? `<div class="${twins.some(o => together(e.k, o.k)) ? "ov" : "faint"}">mêmes horaires que ${twins.map(o => `<b>${esc(o.code)}</b>`).join(", ")}${twins.some(o => together(e.k, o.k)) ? "" : " · jamais ensemble"}</div>` : "";
     return `<div class="pr ${e.kind} ${e.with.length ? "conflict" : ""} ${e.s.eval && mine ? "isev" : ""}" ${mine ? `style="${dcol(e.k)}"` : ""}>
       <span class="t">${e.s.debut}–${e.s.fin}</span>
-      <span class="w">${mine ? `<i class="sw"></i>` : ""}<b>${esc(mine ? m.code : e.s.label)}</b> ${mine ? `<span class="faint">${esc(m.campagne)}</span>` : `<span class="faint">promo</span>`}<br><span class="muted">${what}</span><br><span class="faint">${kind}</span>${ov}</span>
+      <span class="w">${mine ? `<i class="sw"></i>` : ""}<b>${esc(mine ? m.code : e.s.label)}</b> ${mine ? `<span class="faint">${esc(m.campagne)}</span>` : `<span class="faint">promo</span>`}<br><span class="muted">${what}</span><br><span class="faint">${kind}</span>${ov}${same}</span>
     </div>`;
   };
   pop.innerHTML = `<div class="pop-head"><b>${d.charAt(0).toUpperCase() + d.slice(1)}</b><button class="d-close" data-close aria-label="Fermer">✕</button></div>
-    <div class="pop-body">${evs.length ? evs.map(row).join("") : `<p class="faint small pad">Rien de prévu ce jour-là.</p>`}</div>
-    <div class="pop-foot faint">Même jour à des heures différentes : pas de problème. Seuls les horaires qui se recouvrent comptent.</div>`;
+    <div class="pop-body">${evs.length ? evs.map(row).join("") : `<p class="faint small pad">Rien de prévu ce jour-là.</p>`}</div>`;
   pop.hidden = false; popDate = date;
   const r = anchor.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
   let x = r.right + 6; if (x + pw > innerWidth - 8) x = r.left - pw - 6; if (x < 8) x = 8;
